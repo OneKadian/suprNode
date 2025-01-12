@@ -28,12 +28,13 @@ const Port = process.env.PORT || 4000;
 
 io.on("connection", (socket) => {
   console.log("a user connected");
-
+  // Join Room
   socket.on("joinRoom", (data) => {
     console.log("joined room", data.roomId);
     socket.join(data.roomId);
     const elements = rooms.find((element) => element.roomId === data.roomId);
     if (elements) {
+      // uppdate the new user with the current canvas
       io.to(socket.id).emit("updateCanvas", elements);
       elements.user = [...elements.user, socket.id];
     } else {
@@ -45,25 +46,9 @@ io.on("connection", (socket) => {
       });
     }
   });
-
-  socket.on("leaveRoom", (data) => {
-    console.log("left room", data.roomId);
-    socket.leave(data.roomId);
-    rooms = rooms.map((room) => {
-      if (room.roomId === data.roomId) {
-        return {
-          ...room,
-          user: room.user.filter((id) => id !== socket.id),
-        };
-      }
-      return room;
-    });
-
-    // Clean up empty rooms
-    rooms = rooms.filter((room) => room.user.length > 0);
-  });
-
+  // update the canvas
   socket.on("updateCanvas", (data) => {
+    // Broadcast the updated elements to all connected clients
     socket.to(data.roomId).emit("updateCanvas", data);
     const elements = rooms.find((element) => element.roomId === data.roomId);
     if (elements) {
@@ -72,22 +57,29 @@ io.on("connection", (socket) => {
     }
   });
 
+  // send message
   socket.on("sendMessage", (data) => {
+    // Broadcast the updated elements to all connected clients
     socket.to(data.roomId).emit("getMessage", data);
     io.to(socket.id).emit("getMessage", data);
   });
 
+  // ping server every 2 min to prevent render server from sleeping
   socket.on("pong", () => {
     setTimeout(() => {
       socket.emit("ping");
     }, 120000);
   });
 
+  //clear elements when no one is in the room
   socket.on("disconnect", () => {
     rooms.forEach((element) => {
       element.user = element.user.filter((user) => user !== socket.id);
+      if (element.user.length === 0) {
+        rooms = rooms.filter((room) => room.roomId !== element.roomId);
+      }
     });
-    rooms = rooms.filter((room) => room.user.length > 0);
+    // console.log(rooms);
   });
 });
 
